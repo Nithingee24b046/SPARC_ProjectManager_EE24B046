@@ -1,0 +1,39 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import signal
+
+# Parameters
+fs = 100000  # Sampling frequency
+N = 102400   # Number of samples
+
+# Generate white Gaussian noise
+noise = np.random.normal(0, 10, N)
+
+# Compute PSD using Welch’s method
+f, Pxx = signal.welch(noise, fs, nperseg=256)
+
+# Generate a Gaussian bell curve (not related to the PSD, for comparison only)
+mu = 0
+sigma = 10
+x = np.linspace(-100, 100, 500)
+gaussian_curve = np.exp(-0.5 * ((x - mu) / sigma)**2)
+gaussian_curve /= (sigma * np.sqrt(2 * np.pi))  # Normalize
+
+# Plotting
+fig, (ax1, ax2) = plt.subplots(2, 1)
+
+# Plot Gaussian curve
+ax1.plot(x, gaussian_curve)
+ax1.set_title('Gaussian Bell Curve')
+ax1.set_xlabel('X values')
+ax1.set_ylabel('Probability Density')
+
+# Plot PSD of white Gaussian noise
+ax2.plot(f, Pxx)
+ax2.set_title('PSD of White Gaussian Noise')
+ax2.set_xlabel('Frequency (Hz)')
+ax2.set_ylabel('Power/Frequency (V²/Hz)')
+
+plt.tight_layout()
+plt.grid(True)
+plt.show()
