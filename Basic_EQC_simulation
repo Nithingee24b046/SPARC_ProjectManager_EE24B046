@@ -1,0 +1,19 @@
+import numpy as np
+
+#Create an array of 100 random bits
+message = np.random.randint(0,2,100)
+
+erasure_prob = 0.2
+erasures = np.random.rand(len(message)) < erasure_prob
+
+
+received = message.astype(object)
+received[erasures] = "?"
+
+n = np.count_nonzero(received == "?")
+print(n)
+
+Fraction_of_Erasures = n/len(message)
+print(Fraction_of_Erasures)
+print(message)
+print(received)
