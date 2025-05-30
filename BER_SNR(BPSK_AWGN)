@@ -1,74 +1,44 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-def BER(noise_power):
-    # Parameters
-    num_bits = 1000
-    T = 1e-3  # Time period of one symbol (1 ms)
-    fs = 100000  # Sampling frequency (100 kHz)
-    samples_per_bit = int(T * fs)
-    fc = 1000  # Carrier frequency (1 kHz)
+def BER(snr_dB):
+    num_bits = 10000
     Eb = 1  # Energy per bit
-    t_bit =[]
-    bits =[]
-    bpsk_signal =[]
-    received_signal =[]
-    noise =[]
-    num_errors = 0
-    ber = 0
 
-    # Time axis for one bit
-    t_bit = np.linspace(0, T, samples_per_bit, endpoint=False)
-
-    # Generate random bits (0 or 1)
+    # Generating random bits and map to BPSK symbols
     bits = np.random.randint(0, 2, num_bits)
+    symbols = 2 * bits - 1  # BPSK: 0 → -1, 1 → +1
 
-    # BPSK Mapping: 0 -> -1, 1 -> +1
-    symbols = 2 * bits - 1  # Now values are -1 or +1
+    # Adding AWGN noise
+    snr_linear = 10 ** (snr_dB / 10)
+    noise_power = Eb / snr_linear
+    noise = np.random.normal(0, np.sqrt(noise_power), num_bits)
+    received = symbols + noise
 
-    # Generate BPSK signal (concatenate cosines for each symbol)
-    bpsk_signal = np.concatenate([
-        np.sqrt(2 * Eb / T) * sym * np.cos(2 * np.pi * fc * t_bit)
-        for sym in symbols
-    ])
+    # Corruption
+    errors = symbols * received
+    num_errors = np.sum(errors < 0)
 
-    # Add noise
-    noise = np.sqrt(noise_power) * np.random.randn(len(bpsk_signal))
-    received_signal = bpsk_signal + noise
-
-    # Receiver: demodulate using matched filtering (correlation with reference cosine)
-    decoded_bits = []
-    for i in range(num_bits):
-        segment = received_signal[i * samples_per_bit : (i + 1) * samples_per_bit]
-        reference = np.sqrt(2 * Eb / T) * np.cos(2 * np.pi * fc * t_bit)
-        correlation = np.dot(segment, reference)
-        bit = 1 if correlation > 0 else 0
-        decoded_bits.append(bit)
-
-    decoded_bits = np.array(decoded_bits)
-
-    # Bit Error Rate
-    num_errors = np.sum(bits != decoded_bits)
+    # BER
     ber = num_errors / num_bits
-
     return ber
 
-#Take some 10 values of BER and average them out
-#400 values of SNR between -10 and 10 dB
+
+#Take some 20 values of BER and average them out
+#1000 values of SNR between 2 and 10 dB
 array_ber = []
-for i in range(400):
+for i in range(1000):
     sum = 0
-    for j in range(10):
-        snr = -10 + 0.05*i
-        noise_power = 2000/((10 ** (snr / 10))**2)
-        sum = BER(noise_power) + sum
-    Avg_ber = sum / 10
+    for j in range(20):
+        snr = 2 + 0.008*i
+        # noise_power = 2000/((10 ** (snr / 10))**2)
+        sum = BER(snr) + sum
+    Avg_ber = sum / 20
     array_ber.append(Avg_ber)
 
 
 #Plot BER vs SNR
-SNR = np.linspace(-10, 10, 400)
+SNR = np.linspace(2, 10, 1000)
 plt.plot(SNR, array_ber)
 plt.xlabel("SNR (dB)")
 plt.ylabel("BER")
