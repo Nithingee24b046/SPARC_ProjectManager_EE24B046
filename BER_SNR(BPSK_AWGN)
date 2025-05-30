@@ -1,0 +1,77 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def BER(noise_power):
+    # Parameters
+    num_bits = 1000
+    T = 1e-3  # Time period of one symbol (1 ms)
+    fs = 100000  # Sampling frequency (100 kHz)
+    samples_per_bit = int(T * fs)
+    fc = 1000  # Carrier frequency (1 kHz)
+    Eb = 1  # Energy per bit
+    t_bit =[]
+    bits =[]
+    bpsk_signal =[]
+    received_signal =[]
+    noise =[]
+    num_errors = 0
+    ber = 0
+
+    # Time axis for one bit
+    t_bit = np.linspace(0, T, samples_per_bit, endpoint=False)
+
+    # Generate random bits (0 or 1)
+    bits = np.random.randint(0, 2, num_bits)
+
+    # BPSK Mapping: 0 -> -1, 1 -> +1
+    symbols = 2 * bits - 1  # Now values are -1 or +1
+
+    # Generate BPSK signal (concatenate cosines for each symbol)
+    bpsk_signal = np.concatenate([
+        np.sqrt(2 * Eb / T) * sym * np.cos(2 * np.pi * fc * t_bit)
+        for sym in symbols
+    ])
+
+    # Add noise
+    noise = np.sqrt(noise_power) * np.random.randn(len(bpsk_signal))
+    received_signal = bpsk_signal + noise
+
+    # Receiver: demodulate using matched filtering (correlation with reference cosine)
+    decoded_bits = []
+    for i in range(num_bits):
+        segment = received_signal[i * samples_per_bit : (i + 1) * samples_per_bit]
+        reference = np.sqrt(2 * Eb / T) * np.cos(2 * np.pi * fc * t_bit)
+        correlation = np.dot(segment, reference)
+        bit = 1 if correlation > 0 else 0
+        decoded_bits.append(bit)
+
+    decoded_bits = np.array(decoded_bits)
+
+    # Bit Error Rate
+    num_errors = np.sum(bits != decoded_bits)
+    ber = num_errors / num_bits
+
+    return ber
+
+#Take some 10 values of BER and average them out
+#400 values of SNR between -10 and 10 dB
+array_ber = []
+for i in range(400):
+    sum = 0
+    for j in range(10):
+        snr = -10 + 0.05*i
+        noise_power = 2000/((10 ** (snr / 10))**2)
+        sum = BER(noise_power) + sum
+    Avg_ber = sum / 10
+    array_ber.append(Avg_ber)
+
+
+#Plot BER vs SNR
+SNR = np.linspace(-10, 10, 400)
+plt.plot(SNR, array_ber)
+plt.xlabel("SNR (dB)")
+plt.ylabel("BER")
+plt.title("BER vs SNR")
+plt.grid()
+plt.show()
