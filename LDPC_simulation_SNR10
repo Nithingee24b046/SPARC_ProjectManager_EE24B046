@@ -1,0 +1,256 @@
+import numpy as np
+import random
+
+def check_4_cycles_optimized(matrix, new_col_idx, new_col):
+    #Check for 4-cycles using dot product method
+    if new_col_idx == 0:
+        return False
+    
+    for col_idx in range(new_col_idx):
+        existing_col = matrix[:, col_idx]
+        dot_product = np.dot(new_col, existing_col)
+        if dot_product == 2:
+            return True
+    return False
+
+def generate_column(num_rows, weight_range=(3, 5)):
+    #Generate a column with random weight between weight_range[0] and weight_range[1]
+    weight = random.randint(weight_range[0], weight_range[1])
+    col = np.zeros(num_rows, dtype=int)
+    positions = random.sample(range(num_rows), weight)
+    col[positions] = 1
+    return col
+
+def construct_ldpc_parity_check_matrix(n_rows=500, n_cols=500, max_attempts=1000):
+    #Construct the A matrix part of H = [A, I] for LDPC codes
+    A = np.zeros((n_rows, n_cols), dtype=int)
+    
+    print("Constructing matrix A column by column...")
+    
+    for col_idx in range(n_cols):
+        attempts = 0
+        column_found = False
+        
+        while attempts < max_attempts and not column_found:
+            new_col = generate_column(n_rows)
+            if not check_4_cycles_optimized(A, col_idx, new_col):
+                A[:, col_idx] = new_col
+                column_found = True
+            attempts += 1
+        
+        if not column_found:
+            A[:, col_idx] = new_col
+    
+    return A, True
+
+def construct_generator_matrix(A):
+    #Construct the generator matrix G = [I_k, A^T]
+    k = A.shape[0]  # Number of information bits (500)
+    I_k = np.eye(k, dtype=int)
+    A_T = A.T
+    G = np.concatenate([I_k, A_T], axis=1)
+    print(f"Generator matrix G constructed: {G.shape}")
+    return G
+
+def encode_message(message_bits, G):
+    #Encode a message using the generator matrix
+    codeword = np.dot(message_bits, G) % 2
+    return codeword
+
+def generate_codewords(G, num_codewords=200):
+    #Generate multiple random message bits and their corresponding codewords
+    k = G.shape[0]  # Number of information bits (500)
+    message_bits_list = []
+    codewords_list = []
+    
+    print(f"Generating {num_codewords} random message sets and their codewords...")
+    
+    for i in range(num_codewords):
+        message_bits = np.random.randint(0, 2, size=k)
+        codeword = encode_message(message_bits, G)
+        message_bits_list.append(message_bits.copy())
+        codewords_list.append(codeword.copy())
+    
+    return message_bits_list, codewords_list
+
+def bpsk_modulation(bits):
+    return 2 * bits - 1
+
+def add_awgn_noise(signal, snr_db, rate=0.5):
+    snr_linear = 10**(snr_db/10)
+    # For BPSK: noise variance = 1/(2*rate*SNR_linear)
+    noise_variance = 1/(2* rate*snr_linear)
+    noise = np.random.normal(0, np.sqrt(noise_variance), signal.shape)
+    return signal + noise
+
+def compute_initial_llr(noisy_signals, snr_db):
+    noisy_signals = np.array(noisy_signals)
+    snr_linear = 10 ** (snr_db / 10)
+    return 4 * noisy_signals * snr_linear # Formula in the reference PDF used
+
+def syndrome(codeword, H): #Checks Hz^t = 0 or not 
+    return np.mod(np.dot(H, np.transpose(codeword)), 2)
+
+def belief_propagation(initial_LLR,H):
+    # Full implementation of belief propagation
+    duplicate_initial_LLR = initial_LLR.copy()
+    v=0
+    while(v<1):
+        E= np.zeros((500,1000),dtype=float)
+        L = np.zeros((1000))
+        z = np.zeros((1000))
+        for j in range(500):
+            product = 1
+            indices = np.where(H[j] == 1)[0]
+            for i in range(1000):
+                if i not in indices:
+                    continue
+                tanh_list = []
+                for k in indices:
+                    if k != i:
+                        tanh_list.append(np.tanh(initial_LLR[j][k] / 2))
+                product = np.prod(tanh_list)
+                product = np.clip(product, -0.999999, 0.999999)
+                E[j, i] = np.log((1 + product) / (1 - product))
+
+        for i in range(1000):
+            temp_sum = np.sum(E,axis=0)
+            L[i] = temp_sum[i] + duplicate_initial_LLR[0][i]
+            if L[i] > 0:
+                z[i] = 1
+            else:
+                z[i] = 0
+
+        initial_LLR = np.zeros((500,1000), dtype=float)
+    
+        if np.all(syndrome(z, H) == 0):
+            return z
+        else:
+            for i in range(1000):
+                indices = np.where(H[:, i] == 1)[0]
+                for j in indices:
+                    temp = np.sum(E[indices, i]) - E[j, i] 
+                    initial_LLR[j][i] = temp + duplicate_initial_LLR[0][i]
+        v=v+1
+    return z
+
+
+def simulate_channel_transmission(codewords_list, snr_db, rate=0.5):
+    # Simulate channel transmission
+    modulated_signals = []
+    noisy_signals = []
+    
+    for i, codeword in enumerate(codewords_list):
+        # Step 1: BPSK Modulation
+        modulated = bpsk_modulation(codeword)
+        
+        # Step 2: Add AWGN noise
+        noisy_signal = add_awgn_noise(modulated, snr_db, rate)
+        
+        # Store results
+        modulated_signals.append(modulated)
+        noisy_signals.append(noisy_signal)
+        
+        if (i + 1) % 50 == 0:
+            print(f"Processed {i + 1}/{len(codewords_list)} codewords")
+    
+    print(f"Channel simulation completed.")
+    print(f"Stored {len(noisy_signals)} noisy received vectors.")
+    
+    return {
+        'original_codewords': codewords_list,
+        'modulated_signals': modulated_signals,
+        'noisy_signals': noisy_signals,
+        'snr_db': snr_db,
+        'rate': rate
+    }
+
+def hard_decision_decode(received_signal):
+    return (received_signal > 0).astype(float)  # r > 0 -> 1, r <= 0 -> 0
+
+def main():
+    print("LDPC Code Simulation with BPSK AWGN Channel")
+    print("=" * 60)
+    
+    # Set random seed for reproducibility
+    np.random.seed(42)
+    random.seed(42)
+    
+    # Step 1: Construct matrix A
+    print("Step 1: Constructing LDPC matrices...")
+    A, success = construct_ldpc_parity_check_matrix()
+    
+    if not success:
+        print("Failed to construct matrix A")
+        return None
+    
+    # Step 2: Construct parity check matrix H = [A, I]
+    I = np.eye(500, dtype=int)
+    H = np.concatenate([A, I], axis=1)
+    print(f"Parity check matrix H shape: {H.shape}")
+    
+    # Step 3: Construct generator matrix G = [I_k, A^T]
+    G = construct_generator_matrix(A)
+    
+    # Step 4: Generate random message bits and codewords
+    message_bits_list, codewords_list = generate_codewords(G, num_codewords=200)
+    
+    # Step 5: Simulate channel transmission
+    transmission_results = simulate_channel_transmission(
+        codewords_list, 
+        snr_db=10, 
+        rate=0.5
+    ) 
+
+    # Step 7: Compute initial total LLR
+    print(f"\nComputing initial total LLR...")
+    initial_total_llr = compute_initial_llr(
+        transmission_results['noisy_signals'],
+        transmission_results['snr_db']
+    )
+
+    count_hard_decoder = 0
+
+    for i in range(200):
+        hard_decoded = hard_decision_decode(transmission_results['noisy_signals'][i]) 
+        original_codeword = transmission_results['original_codewords'][i]
+        result_hard_decoder = original_codeword == hard_decoded
+        count_hard_decoder += np.sum(result_hard_decoder)
+
+    BER_hard = 1 - (count_hard_decoder / (200000))  # 200 codewords × 1000 bits each
+    print(f"BER in hard decoding is : {BER_hard}")
+
+
+    final_codewords = []
+    #Step 8 : Do belief propagation
+    for i in range(1):
+        print(f"\nPerforming belief propagation...")
+        f = np.zeros((500,1000),dtype=float)
+        f[:,0:1000] = initial_total_llr[i]
+        final_llr = belief_propagation(f,H)
+        final_codewords.append(final_llr)
+
+    modulated_signals_final =[]
+
+    #Step 9: Compute final BER for the received codewords
+    print(f"\nComputing final BER...")
+    for codeword in final_codewords:
+        final_modulated = hard_decision_decode(codeword)
+        modulated_signals_final.append(final_modulated)
+
+    count_LDPC=0
+    for i in range(1):
+    #Do dot product in transmission modulated signal and modulated signals final
+        result_LDPC_BER = transmission_results['original_codewords'][i] == modulated_signals_final[i]
+        count_LDPC += np.sum(result_LDPC_BER)
+    LDPC_BER = 1-(np.sum(count_LDPC)/1000)
+    print(f"BER in LDPC decoder: {LDPC_BER}")
+
+    print(f"\nSimulation completed!")
+    # print(f"Final BER: {count / (1000 * 200)}")
+    
+    return {'H': H,'G': G,'A': A,'I': I,'message_bits_list': message_bits_list,'transmission_results': transmission_results,}
+
+# Execute the simulation
+if __name__ == "__main__":
+    results = main()
