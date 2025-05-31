@@ -1,0 +1,74 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Parameters
+lambda_rate = 0.8
+mu_rate = 1.0
+num_bits = 100
+
+# a) Generate inter-arrival times and arrival times
+inter_arrival_times = np.random.exponential(1/lambda_rate, num_bits)
+arrival_times = np.cumsum(inter_arrival_times)
+
+# b) Plot distribution of arrival times (inter-arrival times)
+plt.figure(figsize=(10, 4))
+plt.hist(inter_arrival_times, bins=20, alpha=0.7, color='blue')
+plt.title('Distribution of Inter-Arrival Times')
+plt.xlabel('Inter-Arrival Time')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
+
+# c) Generate service times and plot their distribution
+service_times = np.random.exponential(1/mu_rate, num_bits)
+plt.figure(figsize=(10, 4))
+plt.hist(service_times, bins=20, alpha=0.7, color='green')
+plt.title('Distribution of Service Times')
+plt.xlabel('Service Time')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
+
+# d) Compute sojourn times and transmission times
+start_service_times = np.zeros(num_bits)
+departure_times = np.zeros(num_bits)
+sojourn_times = np.zeros(num_bits)
+
+for i in range(num_bits):
+    if i == 0:
+        start_service_times[i] = arrival_times[i]
+    else:
+        start_service_times[i] = max(arrival_times[i], departure_times[i-1])
+    departure_times[i] = start_service_times[i] + service_times[i]
+    sojourn_times[i] = departure_times[i] - arrival_times[i]
+
+# e) Compute erasure probability and randomly erase bits
+p_W = 1 - np.exp(-0.1 * sojourn_times)
+erased = np.random.rand(num_bits) < p_W
+
+# f) Mark erased positions, report fraction erased, and plot
+original_bits = np.ones(num_bits, dtype=int)
+received = original_bits.astype(str)
+received[erased] = '?'
+fraction_erased = np.mean(erased)
+print(f"Fraction of erased bits: {fraction_erased:.2f}")
+
+# Plot original and received vectors
+plt.figure(figsize=(12, 3))
+plt.plot(range(num_bits), original_bits, 'bo', label='Original bits (1)')
+plt.scatter(np.where(erased), np.ones(np.sum(erased)), color='red', marker='x', label='Erased bits (?)')
+plt.title('Original and Received Vectors')
+plt.xlabel('Bit Index')
+plt.yticks([1], ['1/?'])
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Plot histogram of sojourn times
+plt.figure(figsize=(10, 4))
+plt.hist(sojourn_times, bins=20, alpha=0.7, color='purple')
+plt.title('Histogram of Sojourn Times')
+plt.xlabel('Sojourn Time')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
