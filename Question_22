@@ -1,16 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Parameters
 lambda_rate = 0.8
 mu_rate = 1.0
 num_bits = 1000
 
-# a) Generate inter-arrival times and arrival times
+# Generate inter-arrival times and arrival times
 inter_arrival_times = np.random.exponential(1/lambda_rate, num_bits)
 arrival_times = np.cumsum(inter_arrival_times)
 
-# b) Plot distribution of arrival times (inter-arrival times)
+# Plot distribution of arrival times (inter-arrival times)
 plt.figure(figsize=(10, 4))
 plt.hist(inter_arrival_times, bins=100, alpha=0.7, color='blue')
 plt.title('Distribution of Inter-Arrival Times')
@@ -19,7 +18,7 @@ plt.ylabel('Frequency')
 plt.grid(True)
 plt.show()
 
-# c) Generate service times and plot their distribution
+# Generate service times and plot their distribution
 service_times = np.random.exponential(1/mu_rate, num_bits)
 plt.figure(figsize=(10, 4))
 plt.hist(service_times, bins=100, alpha=0.7, color='green')
@@ -29,14 +28,14 @@ plt.ylabel('Frequency')
 plt.grid(True)
 plt.show()
 
-# d) Compute sojourn times and transmission times
+# Compute sojourn times and transmission times
 sojourn_times = np.random.exponential(1/(mu_rate-lambda_rate), num_bits)
 
-# e) Compute erasure probability and randomly erase bits
+# Compute erasure probability and randomly erase bits
 p_W = 1 - np.exp(-0.1 * sojourn_times)
 erased = np.random.rand(num_bits) < p_W
 
-# f) Mark erased positions, report fraction erased, and plot
+# Mark erased positions, report fraction erased, and plot
 original_bits = np.random.randint(0, 2, num_bits)
 received = original_bits.astype(str)
 received[erased] = '?'
